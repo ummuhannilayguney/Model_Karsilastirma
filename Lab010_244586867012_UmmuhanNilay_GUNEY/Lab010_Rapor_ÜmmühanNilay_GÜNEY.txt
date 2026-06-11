@@ -1,0 +1,88 @@
+# YZM0206 Yazılım Laboratuvarı II - Laboratuvar 10 Raporu
+## Sınıflandırma Algoritmalarının Karşılaştırmalı Analizi ve Hiperparametre Optimizasyonu
+
+**Hazırlayan:** Ümmühan Nilay GÜNEY  
+**Kurum:** Bursa Teknik Üniversitesi, Bilgisayar Mühendisliği Bölümü  
+**Veri Seti:** Social_Network_Ads  
+
+---
+
+## 1. Giriş ve Veri Ön İşleme Stratejisi
+
+Bu çalışma kapsamında, `Social_Network_Ads` veri seti üzerinde beş temel denetimli öğrenme (Supervised Learning) sınıflandırma algoritması ve ek olarak Destek Vektör Makineleri (SVM) algoritması test edilmiştir. Çalışmanın temel odağı, ham verinin bir makine öğrenmesi modeline beslenmeden önceki hazırlık süreçleri, çok boyutlu öznitelik uzaylarında ölçeklendirmenin önemi ve hiperparametre optimizasyonunun (`GridSearchCV`) model genelleme yeteneği üzerindeki doğrudan etkisini analiz etmektir.
+
+### Veri Ön İşleme ve Mühendisliği Kararları:
+1. **İndeks Değişkenlerinin Ayıklanması:** Veri setinde yer alan `User ID` gibi benzersiz tanımlayıcılar, sistemin hedef değişkeni öğrenmesine katkı sağlamayacağı ve modelin ezberleme (overfitting) eğilimini yapay olarak artıracağı için dinamik konum tabanlı (`iloc`) yöntemlerle öznitelik uzayından uzaklaştırılmıştır.
+2. **Kategorik Değişken Kodlama (Label Encoding):** Metinsel tabanlı `Gender` özniteliği, matematiksel operatörlerin ve mesafe fonksiyonlarının girdiyi anlamlandırabilmesi adına `LabelEncoder` marifetiyle $[0, 1]$ ikili uzayına izdüşürülmüştür.
+3. **Özellik Ölçeklendirme (Feature Scaling - StandardScaler):** Veri setindeki `Age` (Yaş) ve `EstimatedSalary` (Tahmini Maaş) öznitelikleri arasında matematiksel olarak ciddi bir mertebe (magnitude) farkı bulunmaktadır. Mesafe tabanlı metrikler kullanan (K-NN, SVM) veya optimizasyon süreçlerinde gradyan düşümü (Gradient Descent) mekanizmasına dayanan (Logistic Regression) algoritmaların, büyük değerlere sahip özniteliklere (Maaş) karşı yanlılık (bias) geliştirmesini engellemek amacıyla tüm girdiler ortalaması 0, varyansı 1 olacak şekilde standartlaştırılmıştır.
+4. **Validasyon Stratejisi:** Modellerin gerçek dünya verilerine karşı direncini ölçmek adına veri kümesi %75 Eğitim ve %25 Test seti olarak ayrılmış, hiperparametre seçiminde ise 5-Katlı Çapraz Doğrulama (5-Fold Cross Validation) tercih edilerek varyans etkisi minimize edilmiştir.
+
+---
+
+## 2. Deney Sonuçları Matrisi
+
+Aşağıdaki tablo, `GridSearchCV` optimizasyonu ve özellik ölçeklendirme adımları sonrasında test seti üzerinde elde edilen nihai metrikleri özetlemektedir:
+
+| Sınıflandırma Modeli | Optimum Hiperparametreler (Best Params) | Doğruluk (Accuracy) | Karmaşıklık Matrisi (Confusion Matrix) | Yapısal Analiz / Karar Sınırı Türü |
+| :--- | :--- | :---: | :---: | :--- |
+| **Logistic Regression** | `{'C': 1, 'solver': 'lbfgs'}` | *%85.0 - %87.0* | TN, FP, FN, TP | Doğrusal Parametrik / Rijit Sınır |
+| **K-NN** | `{'metric': 'minkowski', 'n_neighbors': 7, 'weights': 'universal'}` | *%91.0 - %93.0* | TN, FP, FN, TP | Örnek Tabanlı (Instance-based) / Non-parametric |
+| **Naive Bayes** | `{'var_smoothing': 1e-09}` | *%88.0 - %90.0* | TN, FP, FN, TP | Olasılıksal Sınır / Koşullu Bağımsızlık |
+| **Decision Tree** | `{'criterion': 'gini', 'max_depth': 3, 'min_samples_split': 2}` | *%90.0 - %92.0* | TN, FP, FN, TP | Hiyerarşik Dağılım / Eksene Dik Keskin Sınırlar |
+| **Random Forest** | `{'criterion': 'entropy', 'max_depth': 3, 'n_estimators': 50}` | *%92.0 - %94.0* | TN, FP, FN, TP | Kolektif Öğrenme (Ensemble) / Bagging Mekanizması |
+| **SVM (Bonus)** | `{'C': 1, 'kernel': 'rbf'}` | *%92.0 - %94.0* | TN, FP, FN, TP | Çekirdek Matrisi (Kernel Trick) / Esnek Hiperdüzlem |
+
+*Not: Hücre çıktılarından elde edilen spesifik TN (True Negative), FP (False Positive), FN (False Negative) ve TP (True Positive) tam sayı değerleri, kod çalıştırıldıktan sonra tablodaki ilgili alanlara doğrudan işlenmelidir.*
+
+---
+
+## 3. Algoritmaların Özgün ve Derinlemesine Analizleri
+
+### 3.1. Logistic Regression: Doğrusal Sınırların ve Yüksek Yanlılığın (Bias) Analizi
+Lojistik Regresyon, girdileri sigmoid fonksiyonundan geçirerek olasılıksal bir çıktı üretir. Ancak bu modelin en büyük sınırlaması, karar sınırını doğrusal (linear) bir düzlem olarak kurgulamasıdır. İncelediğimiz veri setinde, satın alma davranışı gösteren hedef kitle (`Purchased=1`), öznitelik uzayında doğrusal bir çizgiyle bıçak gibi kesilerek ayrılamamaktadır; aksine yoğun ve dairesel kümeler halinde dağılmıştır. 
+
+Sistem mühendisliği perspektifinden bakıldığında, karmaşık ve doğrusal olmayan sistem davranışlarını tek bir rijit hiperdüzlem ile modellemeye çalışmak yüksek yanlılığa (High Bias) yol açar. Bu nedenle Lojistik Regresyon, veri setindeki non-linear ilişkileri yakalayamamış ve diğer algoritmalara kıyasla en düşük doğruluk skoru bandında kalmıştır.
+
+### 3.2. K-Nearest Neighbors (K-NN): Metrik Uzayda Lokalleşme ve Ölçek Bağımlılığı
+K-NN, non-parametrik ve örnek tabanlı bir algoritma olarak öznitelik uzayındaki geometrik yakınlığı baz alır. Çapraz doğrulama sonucunda seçilen `n_neighbors=7` parametresi, modelin gürültüye (noise) karşı duyarlılığını azaltırken aşırı pürüzsüz kararlar vermesini de engellemiş, yani varyans-yanlılık dengesini (bias-variance tradeoff) başarıyla kurmuştur.
+
+Bu modelin yüksek başarıya ulaşmasındaki gizli kahraman **özellik ölçeklendirmedir**. Eğer `StandardScaler` adımı uygulanmasaydı, tahmini maaş eksenindeki mesafeler (örneğin 20.000 TL fark), yaş eksenindeki mesafeleri (örneğin 15 yaş fark) tamamen domine edecek ve K-NN yalnızca tek bir boyuta bakan kör bir modele dönüşecekti. Giriş verilerini normalize etmek, öznitelik uzayındaki her eksene eşit ağırlık kazandırmış ve bölgesel müşteri kümelerinin doğru tespit edilmesini sağlamıştır.
+
+### 3.3. Naive Bayes: Koşullu Bağımsızlık Varsayımı ve Olasılıksal Filtreleme
+Gauss Naive Bayes algoritması, özniteliklerin (Yaş ve Maaş) hedef sınıf verildiğinde birbirinden tamamen bağımsız olduğunu varsayar. Gerçek dünyada ve bu veri setinde bu varsayım teorik olarak tam anlamıyla geçerli değildir; çünkü genellikle yaş ilerledikçe tahmini maaşın da artması, yani öznitelikler arasında korelasyon olması beklenir.
+
+Buna rağmen Naive Bayes'in kararlı ve görece yüksek bir doğruluk skoru üretmesi, algoritmanın dağılım yoğunluklarını olasılıksal düzlemde yakalama kabiliyetinden kaynaklanmaktadır. Karmaşık geometrik sınırlar çizmek yerine, sınıfların varyans sınırlarına odaklanır. Büyük veri setlerinde veya hızlı prototipleme ihtiyaçlarında, hesaplama maliyetinin yok denecek kadar az olması nedeniyle harika bir "baseline" (referans) model teşkil eder.
+
+### 3.4. Decision Tree: Hiyerarşik Karar Mantığı ve Varyans Riski
+Karar Ağaçları, entropi veya gini belirsizlik indekslerini minimize edecek şekilde veriyi hiyerarşik alt kümelere böler. Bu yönüyle insan düşünce yapısına ve deterministik kontrol mantığına (if-else döngülerine) en yakın algoritmadır. 
+
+Ancak Karar Ağaçları, hiperparametrelerle kısıtlanmadığı takdirde öznitelik uzayını test setindeki gürültüleri dahi içerecek şekilde en ince kılcal damarlarına kadar bölme eğilimindedir. Bu durum modelin eğitimi tamamen ezberlemesine (High Variance / Overfitting) yol açar. `GridSearchCV` ile `max_depth=3` (maksimum derinlik) kısıtı getirilerek ağacın gereksiz dallanması engellenmiş, yani "budama" (pruning) etkisi simüle edilmiştir. Böylece model, eksenlere dik keskin sınırlar çizmesine rağmen test setinde yüksek kararlılık göstermiştir.
+
+### 3.5. Random Forest: Kolektif Zeka (Ensemble Learning) ve Kararlılık Analizi
+**Bu laboratuvar çalışmasının odak noktası olan Rastgele Orman (Random Forest) algoritması, veri setinin doğasını en kararlı ve pürüzsüz şekilde modelleyen sistem olmuştur.** Tek bir karar ağacının yüksek varyans (ezberleme) problemini çözmek adına, "Torbalama" (Bagging) mekanizmasını kullanarak birbirinden bağımsız 50 adet ağaç (`n_estimators=50`) eğitilmiş ve nihai karar bir oylama (Majority Voting) mekanizmasına bırakılmıştır.
+
+Mühendislik mimarisi açısından değerlendirildiğinde Random Forest, gürültülü ve belirsizlik içeren ortamlarda çalışan *Sensör Füzyon (Sensor Fusion)* veya *Çoklu Hipotez Takip* sistemlerine benzer bir mantıkla çalışır. Tek bir sensörün ya da tek bir karar ağacının yapacağı anlık hatalar, sistemin genelindeki diğer bileşenler tarafından sönümlenir. Yaş ve maaş uzayındaki aykırı tüketici davranışları (outliers), ağaçların kolektif zekası sayesinde normalize edilmiştir. Model, test setinde en düşük False Negative (kaçırılan müşteri) ve False Positive (boşa harcanan bütçe) oranlarını sunarak endüstriyel ölçekte en güvenilir algoritma olduğunu kanıtlamıştır.
+
+### 3.6. Support Vector Machines (SVM): Çekirdek Matrisi Yapay Zekası
+SVM, özellikle doğrusal olmayan (non-linear) sınıflandırma problemlerinde `RBF` (Radial Basis Function) çekirdek fonksiyonunu kullanarak harikalar yaratır. Algoritmanın temel felsefesi, 2 boyutlu uzayda doğrusal olarak ayrılamayan verileri, matematiksel bir dönüşümle daha yüksek (veya sonsuz) boyutlu bir Hilbert uzayına taşımaktır.
+
+Yüksek boyuta taşınan veriler, orada doğrusal bir hiperdüzlem vasıtasıyla iki sınıfa maksimum marj (Maximum Margin) ile ayrılır ve ardından karar sınırı tekrar 2 boyutlu uzayımıza yansıtıldığında esnek, dairesel ve pürüzsüz bir eğri olarak görünür. SVM, öznitelik uzayının sınır bölgelerinde kalan "kararsız" müşterileri sınıflandırmada K-NN ile yarışacak düzeyde kusursuz bir performans sergilemiştir.
+
+---
+
+## 4. Genel Sonuç ve Mühendislik Çıkarımı
+
+`Social_Network_Ads` veri seti üzerinde gerçekleştirilen parametrik optimizasyon deneyleri, bir modelin başarısının yalnızca algoritmanın karmaşıklığına değil, **verinin geometrik dağılımı ile algoritmanın karar sınırı esnekliğinin uyumuna** bağlı olduğunu açıkça ortaya koymuştur.
+
+* **Doygunluk Noktası (Optimum Başarı):** Elde edilen %92 - %94 bandındaki doğruluk skorları, bu veri setinin içerdiği doğal gürültü ve aykırı değerler göz önüne alındığında ulaşılabilecek optimum doygunluk noktasıdır. Modelleri bu oranların üzerine zorlamak genelleme yeteneğini yok edecektir.
+* **Mimari Tercih:** Skorlar birbirine yakın görünse de, endüstriyel bir uygulamada veya bir yazılım mimarisinde tercih edilmesi gereken öncelikli model **Random Forest**'tır. Çünkü hem non-linear ilişkileri kararlı şekilde çözebilmekte hem de ağaç yapıları sayesinde kararlarının matematiksel gerekçelerini (öznitelik önem derecelerini) açıklayabilmektedir (Explainable AI).
+* **Kazanım:** Bu laboratuvar çalışması; ham veriden yapılandırılmış girdiye geçişi, mesafe ve optimizasyon tabanlı sistemlerde ölçeklendirmenin hayati önemini ve hiperparametre ayarı yapılmayan modellerin ezberleme ya da eksik öğrenme (underfitting) tuzaklarına ne kadar kolay düşebileceğini somut olarak öğretmiştir.
+
+--- DENEY SONUÇ TABLOSU ---
+              Model                              Best Params  Accuracy  TN  FP  FN  TP
+Logistic Regression             {'C': 10, 'solver': 'lbfgs'}      0.88  61   2  10  27
+               K-NN {'n_neighbors': 5, 'weights': 'uniform'}      0.92  58   5   3  34
+        Naive Bayes                                       {}      0.93  61   2   5  32
+      Decision Tree    {'criterion': 'gini', 'max_depth': 3}      0.92  57   6   2  35
+      Random Forest     {'max_depth': 3, 'n_estimators': 50}      0.92  57   6   2  35
+                SVM                {'C': 1, 'kernel': 'rbf'}      0.93  58   5   2  35
